@@ -1,0 +1,5 @@
+**.vscode**
+**/__pycache__/**
+data
+submodules/
+work_dirs/
