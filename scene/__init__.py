@@ -81,7 +81,7 @@ class Scene:
         else:
             assert False, "Could not recognize scene type!"
 
-        if not self.loaded_iter:
+        if not self.loaded_iter: # 把相机信息保存到json文件中
             #with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
             #    dest_file.write(src_file.read())
             json_cams = []
@@ -95,13 +95,13 @@ class Scene:
             with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
                 json.dump(json_cams, file)
 
-        if shuffle:
+        if shuffle: # 随机打乱相机顺序
             random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
-        self.cameras_extent = scene_info.nerf_normalization["radius"]
+        self.cameras_extent = scene_info.nerf_normalization["radius"] # 之前计算出的相机的范围
 
-        for resolution_scale in resolution_scales:
+        for resolution_scale in resolution_scales: # __init__的地方写死的为1.0
             print("Loading Training Cameras")
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
             print("Loading Test Cameras")
@@ -120,16 +120,16 @@ class Scene:
                                                               "iteration_" + str(self.loaded_iter),
                                                               "bg_point_cloud.ply"))
         else:
-            self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
+            self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent) # 创建初始化的高斯球（包括每个高斯球的中心点,color,scale,rotation, cpacity, sh, 投影到2D的最大范围）
             # for waymo
             if bg_gaussians is not None:
                 self.bg_gaussians.create_from_pcd(scene_info.bg_point_cloud, self.cameras_extent)
 
         self.gaussians.aabb = scene_info.cam_frustum_aabb
         self.gaussians.aabb_tensor = torch.tensor(scene_info.cam_frustum_aabb, dtype=torch.float32).cuda()
-        self.gaussians.nerf_normalization = scene_info.nerf_normalization
+        self.gaussians.nerf_normalization = scene_info.nerf_normalization # 归一化的中心位置和radius
         self.gaussians.img_width = scene_info.train_cameras[0].width
-        self.gaussians.img_height = scene_info.train_cameras[0].height
+        self.gaussians.img_height = scene_info.train_cameras[0].height 
         if scene_info.occ_grid is not None:
             self.gaussians.occ_grid = torch.tensor(scene_info.occ_grid, dtype=torch.bool).cuda() 
         else:
@@ -141,19 +141,19 @@ class Scene:
         #occ = scene_info.occ_grid[voxel_coords[:, 0], voxel_coords[:, 1], voxel_coords[:, 2]]
         #occ_mask = self.gaussians.get_gs_mask_in_occGrid()
         #assert all(occ == occ_mask), 'occ should be equal to occ_mask'
-        if args.load_panoptic_mask:
+        if args.load_panoptic_mask: # ??
             self.gaussians.num_panoptic_objects = scene_info.num_panoptic_objects
             self.gaussians.panoptic_object_ids = scene_info.panoptic_object_ids
             self.gaussians.panoptic_id_to_idx = scene_info.panoptic_id_to_idx
         # for deformation-field
         if hasattr(self.gaussians, '_deformation'):
             self.gaussians._deformation.deformation_net.set_aabb(scene_info.cam_frustum_aabb[1],
-                                                scene_info.cam_frustum_aabb[0])
+                                                scene_info.cam_frustum_aabb[0]) # 对形变网络设置视锥体的范围
         ## make one-hot gt label
         #gt_label = F.one_hot(torch.arange(self.gaussians.num_panoptic_objects)).float().cuda()
         ## set as nn.Embedding
         #self.gaussians.gt_label = torch.nn.Embedding.from_pretrained(gt_label, freeze=True)
-        if build_octree:
+        if build_octree: # ？？？
             # forward : point cloud -> octree
             self.gaussians.build_octree(aabb= scene_info.cam_frustum_aabb, # use camera-extent aabb
                                         resolution=5, threshold=10)
@@ -165,11 +165,11 @@ class Scene:
             self.node_list, self.rot_list, self.scale_list = self.gaussians.octree.get_point_node_list()
             # check if all nodes are leaf nodes
             assert all([node.is_leaf() for node in self.node_list]), 'all nodes should be leaf nodes'
-        if build_grid:
+        if build_grid: # ???
             # 建立 dense-occ-grid 来表达高斯的分布, 优势在于 索引快速
             self.gaussians.build_grid(aabb= scene_info.cam_frustum_aabb, # use camera-extent aabb
                                     res=[128, 128, 128])
-        if build_featgrid:
+        if build_featgrid: # ???
             self.gaussians.build_featgrid(aabb= scene_info.cam_frustum_aabb, # use camera-extent aabb
                                 res=[128, 128, 128])
 

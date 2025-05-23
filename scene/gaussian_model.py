@@ -140,38 +140,38 @@ class GaussianModel:
             self.active_sh_degree += 1
 
     def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float,):
-        self.spatial_lr_scale = spatial_lr_scale
+        self.spatial_lr_scale = spatial_lr_scale  # ？？？这个参数的作用是什么
         # breakpoint()
-        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
+        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda() 
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
+        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda() #4阶球谐波函数，所以共16个参数，而且是3channel，每个channel对应一个SH权重
         features[:, :3, 0 ] = fused_color
-        features[:, 3:, 1:] = 0.0
+        features[:, 3:, 1:] = 0.0 #
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
-        dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
-        scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
+        dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001) #计算每个点到其最近邻点的距离
+        scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3) # 根据这个决定每个3D Gaussian的尺度
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
 
-        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda")) # 初始化每个高斯点的透明度，并从[0-1]逆sigmoid()
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
-        self._deformation = self._deformation.to("cuda") 
+        self._deformation = self._deformation.to("cuda") # 形变网络
         # self.grid = self.grid.to("cuda")
-        self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
-        self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
-        self._scaling = nn.Parameter(scales.requires_grad_(True))
-        self._rotation = nn.Parameter(rots.requires_grad_(True))
-        self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
-        self._deformation_table = torch.gt(torch.ones((self.get_xyz.shape[0]),device="cuda"),0)
+        self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True)) # 第1阶的主球谐波函数
+        self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True)) # 2阶开始的其他球谐波函数
+        self._scaling = nn.Parameter(scales.requires_grad_(True))  # 高斯球的大小
+        self._rotation = nn.Parameter(rots.requires_grad_(True)) # 高斯球的旋转
+        self._opacity = nn.Parameter(opacities.requires_grad_(True)) # 高斯球的不透明度
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda") # 高斯球投影到2D的最大覆盖范围
+        self._deformation_table = torch.gt(torch.ones((self.get_xyz.shape[0]),device="cuda"),0) # 这个不太确定是高斯球的什么？？
     def training_setup(self, training_args):
-        self.percent_dense = training_args.percent_dense
+        self.percent_dense = training_args.percent_dense # 稠密度百分比 0.01
         self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self._deformation_accum = torch.zeros((self.get_xyz.shape[0],3),device="cuda")
+        self._deformation_accum = torch.zeros((self.get_xyz.shape[0],3),device="cuda") # 后面几个应该都是用来搞梯度累计的吧，因为这东西贼耗显存，所以batch_size不能大？？？
         
 
         l = [
@@ -201,7 +201,7 @@ class GaussianModel:
                                                     max_steps=training_args.position_lr_max_steps)    
 
     def update_learning_rate(self, iteration):
-        ''' Learning rate scheduling per step '''
+        ''' Learning rate scheduling per step ''' # 对于不同的参数组，使用不同的学习率
         for param_group in self.optimizer.param_groups:
             if param_group["name"] == "xyz":
                 lr = self.xyz_scheduler_args(iteration)

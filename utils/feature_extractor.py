@@ -171,7 +171,12 @@ class ViTExtractor:
         if "dinov2" in model_type:
             # also supports dinov2+register.
             # dinov2+register still significantly benefits from the our position embedding decomposition!
-            model = torch.hub.load("facebookresearch/dinov2", model_type)
+            try:
+                # 从本地缓存加载
+                model = torch.hub.load("root/.cache/torch/hub/facebookresearch_dinov2_main", model_type, source="local")
+            except:
+                # 从远程加载
+                model = torch.hub.load("facebookresearch/dinov2", model_type)
         elif "dino" in model_type:
             model = torch.hub.load("facebookresearch/dino:main", model_type)
         else:

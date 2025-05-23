@@ -88,7 +88,7 @@ def getNerfppNorm(cam_info):
     for cam in cam_info:
         W2C = getWorld2View2(cam.R, cam.T)
         C2W = np.linalg.inv(W2C)
-        cam_centers.append(C2W[:3, 3:4])
+        cam_centers.append(C2W[:3, 3:4]) # 相机的位置就是cam_centers
 
     center, diagonal = get_center_and_diag(cam_centers)
     radius = diagonal * 1.1
@@ -380,7 +380,7 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
         # get the world-to-camera transform and set R, T
         w2c = np.linalg.inv(c2w)
         R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
-        T = w2c[:3, 3]
+        T = w2c[:3, 3] # 世界坐标系转到相机坐标系的矩阵
         # ------------------
         # load image
         # ------------------
@@ -388,12 +388,12 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
         image_name = Path(cam_name).stem
         image = Image.open(image_path)
         im_data = np.array(image.convert("RGBA"))
-        bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0]) # d-nerf 透明背景
+        bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0]) # d-nerf 透明背景 设定为透明背景
         norm_data = im_data / 255.0
-        arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+        arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4]) # 好像没啥意义，反正是透明背景
         image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
         load_size = frame["load_size"]
-        #image = PILtoTorch(image, load_size) #(800,800))
+        #image = PILtoTorch(image, load_size) #(800,800)) 
         # resize to load_size
         image = image.resize(load_size, Image.BILINEAR)
         # save pil image
@@ -506,12 +506,12 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
             C = features.shape[-1]
             # no need to compute PCA on the entire set of features, we randomly sample 100k features
             temp_feats = features.reshape(-1, C)
-            max_elements_to_compute_pca = min(100000, temp_feats.shape[0])
+            max_elements_to_compute_pca = min(100000, temp_feats.shape[0]) 
             selected_features = temp_feats[
                 np.random.choice(
                     temp_feats.shape[0], max_elements_to_compute_pca, replace=False
                 )
-            ]
+            ] # 随机采样部分features来做PCA降维以免内存溢出
             target_feature_dim = 3
             device='cuda'
             if target_feature_dim is not None:
@@ -534,7 +534,7 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
                 # reduce the features to target_feature_dim
                 selected_features = selected_features @ reduce_to_target_dim_mat
                 features =  features @ reduce_to_target_dim_mat
-                C = features.shape[-1]
+                C = features.shape[-1] # 用PCA降维的方法把channel维度降低到3
 
                 # normalize the reduced features to [0, 1] along each dimension
                 feat_min = features.reshape(-1, C).min(dim=0)[0]
@@ -579,7 +579,7 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
 
             features = dino_feat.reshape(image.size[1], image.size[0], -1)
             feat_map = features.float()
-
+            # 经过PCA降低维度和sample原始的dino特征后得到的特征图[640,960,3]
         cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                         image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1],
                         # for waymo
@@ -592,7 +592,7 @@ def constructCameras_waymo(frames_list, white_background, mapper = {},
                         c2w=c2w if load_c2w else None,
                          ))
             
-    return cam_infos
+    return cam_infos #把一些列信息打包回传
 
 def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=False, 
                   load_sky_mask = False, load_panoptic_mask = True, load_sam_mask = False,load_dynamic_mask = False,
@@ -602,30 +602,30 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
                   save_occ_grid = False, occ_voxel_size = 0.4, recompute_occ_grid=True,
                   stride = 10 , original_start_time = 0
                   ):
-    ORIGINAL_SIZE = [[1280, 1920], [1280, 1920], [1280, 1920], [884, 1920], [884, 1920]]
+    ORIGINAL_SIZE = [[1280, 1920], [1280, 1920], [1280, 1920], [884, 1920], [884, 1920]] #原图每帧5视角
     OPENCV2DATASET = np.array(
         [[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]
-    )
-    load_size = [640, 960]
+    ) # ？？？
+    load_size = [640, 960] # 输出进模型的图像大小要缩小
     # modified from emer-nerf
-    data_root = path
-    image_folder = os.path.join(data_root, "images")
-    num_seqs = len(os.listdir(image_folder))/5
-    start_time = start_time
-    if end_time == -1:
+    data_root = path # 存储这一场景数据的根目录
+    image_folder = os.path.join(data_root, "images") # 这一场景数据的图像文件夹
+    num_seqs = len(os.listdir(image_folder))/5 # 5个视角，所以帧数=图片数量/5
+    start_time = start_time # 从第几帧开始
+    if end_time == -1:  # 如果没有指定结束帧数，则默认结束帧数为总帧数(来自lp的参数，写死的)
         end_time = int(num_seqs)
     else:
         end_time += 1
-    camera_list = [1,0,2]
-    truncated_min_range, truncated_max_range = -2, 80
-    cam_frustum_range = [0.01, 80]
-    # set img_list
-    load_sky_mask = load_sky_mask
-    load_panoptic_mask = load_panoptic_mask
-    load_sam_mask = load_sam_mask
-    load_dynamic_mask = load_dynamic_mask
-    load_feat_map = load_feat_map
-    img_filepaths = []
+    camera_list = [1,0,2] # 5个视角，0-4，选择前3个视角,这个是因为之前转换的时候图片命名顺序错了
+    truncated_min_range, truncated_max_range = -2, 80 # 后面每帧点云的x的范围，比较奇怪，只限定x的范围
+    cam_frustum_range = [0.01, 80] # ？？？
+    # set img_list 是否要load下面这些东西
+    load_sky_mask = load_sky_mask # False
+    load_panoptic_mask = load_panoptic_mask # False
+    load_sam_mask = load_sam_mask   # False
+    load_dynamic_mask = load_dynamic_mask # True，似乎是来自3D检测框
+    load_feat_map = load_feat_map # True，用DinoV2提取得到的
+    img_filepaths = [] # 在下面得到这些的路径
     dynamic_mask_filepaths, sky_mask_filepaths = [], []
     semantic_mask_filepaths, instance_mask_filepaths = [], []
     sam_mask_filepaths = []
@@ -663,7 +663,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
                 stride=7,
                 model_type='dinov2_vitb14',
             )
-    img_filepaths = np.array(img_filepaths)
+    img_filepaths = np.array(img_filepaths) # 把所有路径转成np？为啥不用list
     dynamic_mask_filepaths = np.array(dynamic_mask_filepaths)
     sky_mask_filepaths = np.array(sky_mask_filepaths)
     lidar_filepaths = np.array(lidar_filepaths)
@@ -678,7 +678,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     # original_start_time = 0
     idx_list = range(original_start_time, end_time)
     # map time to [0,1]
-    timestamp_mapper = {}
+    timestamp_mapper = {} # 用字典记录的方式把时间归一化为0-1，key为原时间，value为归一化后的时间
     time_line = [i for i in idx_list]
     time_length = end_time - original_start_time - 1
     for index, time in enumerate(time_line):
@@ -691,9 +691,9 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     cam_to_egos = []
     for i in range(len(camera_list)):
         # load intrinsics
-        intrinsic = np.loadtxt(os.path.join(data_root, "intrinsics", f"{i}.txt"))
+        intrinsic = np.loadtxt(os.path.join(data_root, "intrinsics", f"{i}.txt")) # 9*1的np，相机内参
         fx, fy, cx, cy = intrinsic[0], intrinsic[1], intrinsic[2], intrinsic[3]
-        # scale intrinsics w.r.t. load size
+        # scale intrinsics w.r.t. load size，计算图片scale后的新的内参
         fx, fy = (
             fx * load_size[1] / ORIGINAL_SIZE[i][1],
             fy * load_size[0] / ORIGINAL_SIZE[i][0],
@@ -705,10 +705,10 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
         intrinsic = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
         _intrinsics.append(intrinsic)
         # load extrinsics
-        cam_to_ego = np.loadtxt(os.path.join(data_root, "extrinsics", f"{i}.txt"))
+        cam_to_ego = np.loadtxt(os.path.join(data_root, "extrinsics", f"{i}.txt")) # 4*4的相机外参
         # opencv coordinate system: x right, y down, z front
         # waymo coordinate system: x front, y left, z up
-        cam_to_egos.append(cam_to_ego @ OPENCV2DATASET) # opencv_cam -> waymo_cam -> waymo_ego
+        cam_to_egos.append(cam_to_ego @ OPENCV2DATASET) # opencv_cam -> waymo_cam -> waymo_ego ？？这里感觉是左右手坐标系的不同的问题
     # compute per-image poses and intrinsics
     cam_to_worlds, ego_to_worlds = [], []
     intrinsics, cam_ids = [], []
@@ -717,23 +717,23 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     timestamps, timesteps = [], []
     # we tranform the camera poses w.r.t. the first timestep to make the translation vector of
     # the first ego pose as the origin of the world coordinate system.
-    ego_to_world_start = np.loadtxt(os.path.join(data_root, "ego_pose", f"{start_time:03d}.txt"))
+    ego_to_world_start = np.loadtxt(os.path.join(data_root, "ego_pose", f"{start_time:03d}.txt")) # 4*4,起始帧的时候ego的pose
     for t in range(start_time, end_time):
         ego_to_world_current = np.loadtxt(os.path.join(data_root, "ego_pose", f"{t:03d}.txt"))
         # ego to world transformation: cur_ego -> world -> start_ego(world)
-        ego_to_world = np.linalg.inv(ego_to_world_start) @ ego_to_world_current
+        ego_to_world = np.linalg.inv(ego_to_world_start) @ ego_to_world_current # 以第一帧的时候ego为世界坐标系
         ego_to_worlds.append(ego_to_world)
         for cam_id in camera_list:
             cam_ids.append(cam_id)
             # transformation:
             # opencv_cam -> waymo_cam -> waymo_cur_ego -> world -> start_ego(world)
-            cam2world = ego_to_world @ cam_to_egos[cam_id]
-            cam_to_worlds.append(cam2world)
+            cam2world = ego_to_world @ cam_to_egos[cam_id] # 计算每帧的每个相机转换到世界坐标系的外参
+            cam_to_worlds.append(cam2world) 
             intrinsics.append(_intrinsics[cam_id])
             # ===! we use time indices as the timestamp for waymo dataset for simplicity
             # ===! we can use the actual timestamps if needed
             # to be improved
-            timestamps.append(t - start_time)
+            timestamps.append(t - start_time) # 包含了每个相机的时间戳，类似[0,0,0,1,1,1,...]
             timesteps.append(t - start_time)
         # lidar to world : lidar = ego in waymo
         lidar_to_worlds.append(ego_to_world)
@@ -752,21 +752,21 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     frustums = []
     pix_corners = np.array( # load_size : [h, w]
         [[0,0],[0,load_size[0]],[load_size[1],load_size[0]],[load_size[1],0]]
-    )
+    ) # 计算四个角的u，v坐标
     for c2w, intri in zip(cam_to_worlds, intrinsics):
         frustum = []
         for cam_extent in cam_frustum_range:
             # pix_corners to cam_corners
             cam_corners = np.linalg.inv(intri) @ np.concatenate(
                 [pix_corners, np.ones((4, 1))], axis=-1
-            ).T * cam_extent
+            ).T * cam_extent # 计算四个角的相机坐标系下的坐标（齐次坐标），cam_extent是相机前0.01米-80米的范围
             # cam_corners to world_corners
-            world_corners = c2w[:3, :3] @ cam_corners + c2w[:3, 3:4]
+            world_corners = c2w[:3, :3] @ cam_corners + c2w[:3, 3:4] # 计算四个角的世界坐标系下的坐标
             # compute frustum
-            frustum.append(world_corners)
+            frustum.append(world_corners) # 计算视锥，但是不知道为啥是用相机前0.01米的范围来框的？？
         frustum = np.stack(frustum, axis=0)
         frustums.append(frustum)
-    frustums = np.stack(frustums, axis=0)
+    frustums = np.stack(frustums, axis=0) # 计算视锥
     # compute aabb
     aabbs = []
     for frustum in frustums:
@@ -778,14 +778,14 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     aabbs = np.stack(aabbs, axis=0).reshape(-1,3)
     aabb = np.stack([np.min(aabbs, axis=0), np.max(aabbs, axis=0)], axis=0)
     print('cam frustum aabb min: ', aabb[0])
-    print('cam frustum aabb max: ', aabb[1])
+    print('cam frustum aabb max: ', aabb[1]) # 计算所有相机视锥的包围盒
     # ------------------
     # get split: train and test splits from timestamps
     # ------------------
     # mask
-    if stride != 0 :
+    if stride != 0 : # 这里stride是用来控制训练和测试的帧数的，每隔stride帧取一帧作为测试帧
         train_mask = (timestamps % int(stride) != 0) | (timestamps == 0)
-    else:
+    else: # stride为0时，全部作为训练帧
         train_mask = np.ones(len(timestamps), dtype=bool)
     test_mask = ~train_mask
     # mask to index                                                                    
@@ -793,7 +793,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     test_idx = np.where(test_mask)[0]
     full_idx = np.arange(len(timestamps))
     train_timestamps = timestamps[train_mask]
-    test_timestamps = timestamps[test_mask]
+    test_timestamps = timestamps[test_mask] 
     # ------------------
     # load points and depth map
     # ------------------
@@ -826,12 +826,12 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
         depth_maps = []
         accumulated_num_original_rays = 0
         accumulated_num_rays = 0
-        for t in trange(0, len(lidar_filepaths), desc="loading lidar", dynamic_ncols=True):
+        for t in trange(0, len(lidar_filepaths), desc="loading lidar", dynamic_ncols=True): # 读取雷达数据
             lidar_info = np.memmap(
                 lidar_filepaths[t],
                 dtype=np.float32,
                 mode="r",
-            ).reshape(-1, 10) 
+            ).reshape(-1, 10) #shape: (num_points, 10), 10个特征：0：3代表点云的原点坐标即那一帧的ego的坐标；3:6代表点云的xyz坐标；6:9代表点云的xyz方向???；9:10代表点云的id(第几帧的点云id)
             #).reshape(-1, 14)
             original_length = len(lidar_info)
             accumulated_num_original_rays += original_length
@@ -841,19 +841,19 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
             # select lidar points based on a truncated ego-forward-directional range
             # make sure most of lidar points are within the range of the camera
             valid_mask = lidar_points[:, 0] < truncated_max_range
-            valid_mask = valid_mask & (lidar_points[:, 0] > truncated_min_range)
-            lidar_origins = lidar_origins[valid_mask]
-            lidar_points = lidar_points[valid_mask]
-            lidar_ids = lidar_ids[valid_mask]
+            valid_mask = valid_mask & (lidar_points[:, 0] > truncated_min_range) # 选择x在[-2,80]范围内的点
+            lidar_origins = lidar_origins[valid_mask] 
+            lidar_points = lidar_points[valid_mask] 
+            lidar_ids = lidar_ids[valid_mask] # 都过一遍mask，这代码写得实在太没效率了
             # transform lidar points to world coordinate system
             lidar_origins = (
                 lidar_to_worlds[t][:3, :3] @ lidar_origins.T
                 + lidar_to_worlds[t][:3, 3:4]
-            ).T
+            ).T # 计算每一帧的点云原点在世界坐标系下的坐标。这个点云原点指的是雷达的安装位置，而我们读取的时候的点云坐标实际都已经转换到ego坐标系下了
             lidar_points = (
                 lidar_to_worlds[t][:3, :3] @ lidar_points.T
                 + lidar_to_worlds[t][:3, 3:4]
-            ).T
+            ).T # 计算每一帧的点云在世界坐标系下的坐标
             if load_depthmap:
                 # transform world-lidar to pixel-depth-map
                 for cam_idx in range(len(camera_list)):
@@ -884,7 +884,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
                     # compute depth map
                     depth_map = np.zeros(load_size)
                     depth_map[image_points[:, 1].astype(np.int32), image_points[:, 0].astype(np.int32)] = pixel_points[:, 2]
-                    depth_maps.append(depth_map)
+                    depth_maps.append(depth_map) # 计算每个相机的稀疏的depth_map
             # compute lidar directions
             lidar_directions = lidar_points - lidar_origins
             lidar_ranges = np.linalg.norm(lidar_directions, axis=-1, keepdims=True)
@@ -897,25 +897,25 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
             directions.append(lidar_directions)
             points.append(lidar_points)
             ranges.append(lidar_ranges)
-            laser_ids.append(lidar_ids)
+            laser_ids.append(lidar_ids) # 这个算了能有啥用？？
 
         #origins = np.concatenate(origins, axis=0)
         #directions = np.concatenate(directions, axis=0)
-        points = np.concatenate(points, axis=0)
+        points = np.concatenate(points, axis=0) # 点云拼接
         #ranges = np.concatenate(ranges, axis=0)
         #laser_ids = np.concatenate(laser_ids, axis=0)
-        shs = np.random.random((len(points), 3)) / 255.0
+        shs = np.random.random((len(points), 3)) / 255.0 # 对每个点随机生成颜色？？
         # filter points by cam_aabb 
         cam_aabb_mask = np.all((points >= aabb[0]) & (points <= aabb[1]), axis=-1)
         points = points[cam_aabb_mask]
-        shs = shs[cam_aabb_mask]
+        shs = shs[cam_aabb_mask] # 根据之前视锥的结果过滤点
         # construct occupancy grid to aid densification
         if save_occ_grid:
             #occ_grid_shape = (int(np.ceil((aabb[1, 0] - aabb[0, 0]) / occ_voxel_size)),
             #                    int(np.ceil((aabb[1, 1] - aabb[0, 1]) / occ_voxel_size)),
             #                    int(np.ceil((aabb[1, 2] - aabb[0, 2]) / occ_voxel_size)))
             if not os.path.exists(os.path.join(data_root, "occ_grid.npy")) or recompute_occ_grid:
-                occ_grid = get_OccGrid(points, aabb, occ_voxel_size)
+                occ_grid = get_OccGrid(points, aabb, occ_voxel_size) # 生成occ grid,过程就是造空的occ_grid，然后看里面有点的话置为1，没有的话置为0
                 np.save(os.path.join(data_root, "occ_grid.npy"), occ_grid)
             else:
                 occ_grid = np.load(os.path.join(data_root, "occ_grid.npy"))
@@ -924,14 +924,14 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
             print(f'occ voxel num :{occ_grid.sum()} from {occ_grid.size} of ratio {occ_grid.sum()/occ_grid.size}')
         
         # downsample points
-        points,shs = GridSample3D(points,shs)
+        points,shs = GridSample3D(points,shs) # 对点云进行降采样？？没细看，反正是类似voxel的操作
 
-        if len(points)>num_pts:
+        if len(points)>num_pts: # 不知道在哪儿写死的150000
             downsampled_indices = np.random.choice(
                 len(points), num_pts, replace=False
             )
             points = points[downsampled_indices]
-            shs = shs[downsampled_indices]
+            shs = shs[downsampled_indices] # 随机降采样到允许的最大点数
         
         # check
         #voxel_coords = np.floor((points - aabb[0]) / occ_voxel_size).astype(int)
@@ -943,7 +943,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
         xyz_max = np.max(points,axis=0)
         print("init lidar xyz min:",xyz_min)
         print("init lidar xyz max:",xyz_max)        # lidar-points aabb (range)
-        ## 设置 背景高斯点
+        ## 设置 背景高斯点 ？？？暂时没开，留着之后看
         if use_bg_gs:
             fg_aabb_center, fg_aabb_size = (aabb[0] + aabb[1]) / 2, aabb[1] - aabb[0] # cam-frustum aabb
             # use bg_scale to scale the aabb
@@ -963,9 +963,9 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
             #visualize_points(points, fg_aabb_center, fg_aabb_size)
         # save ply
         ply_path = os.path.join(data_root, "ds-points3d.ply")
-        storePly(ply_path, points, SH2RGB(shs) * 255)
-        pcd = BasicPointCloud(points=points, colors=SH2RGB(shs), normals=np.zeros((len(points), 3)))  
-        if use_bg_gs:
+        storePly(ply_path, points, SH2RGB(shs) * 255) # 随机着色点云保存下来
+        pcd = BasicPointCloud(points=points, colors=SH2RGB(shs), normals=np.zeros((len(points), 3)))  # 不太明白,这里为啥用一阶球谐函数来做转换
+        if use_bg_gs: # ？？？
             bg_ply_path = os.path.join(data_root, "ds-bg-points3d.ply")
             storePly(bg_ply_path, bg_points, SH2RGB(bg_shs) * 255)
             bg_pcd = BasicPointCloud(points=bg_points, colors=SH2RGB(bg_shs), normals=np.zeros((len(bg_points), 3)))
@@ -981,7 +981,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     train_frames_list = [] # time, transform_matrix(c2w), img_path
     test_frames_list = []
     full_frames_list = []
-    for idx, t in enumerate(train_timestamps):
+    for idx, t in enumerate(train_timestamps): # load要训练的部分的数据
         frame_dict = dict(  time = time_line[t+start_time-original_start_time],   # 保存 相对帧索引
                             transform_matrix = cam_to_worlds[train_idx[idx]],
                             file_path = img_filepaths[train_idx[idx]],
@@ -1049,7 +1049,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
-    nerf_normalization = getNerfppNorm(train_cam_infos)
+    nerf_normalization = getNerfppNorm(train_cam_infos) # {"translate": translate, "radius": radius} 根据平均相机位置，找到场景中心以及最大半径
 
 
     # ------------------
@@ -1058,7 +1058,7 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
     num_panoptic_objects = 0
     panoptic_object_ids = None
     panoptic_id_to_idx = {}
-    if load_panoptic_mask:
+    if load_panoptic_mask: # ？？暂时为False
         panoptic_object_ids_list = []
         for cam in train_cam_infos+test_cam_infos:
             if cam.semantic_mask is not None and cam.instance_mask is not None:
@@ -1071,23 +1071,23 @@ def readWaymoInfo(path, white_background, eval, extension=".png", use_bg_gs=Fals
         for idx, panoptic_id in enumerate(panoptic_object_ids):
             panoptic_id_to_idx[panoptic_id] = idx
 
-    scene_info = SceneInfo(point_cloud=pcd,
+    scene_info = SceneInfo(point_cloud=pcd, #包含点位置、颜色和normals（normals暂时全为0，颜色来自Dino的feature map)
                            bg_point_cloud=bg_pcd,
-                           train_cameras=train_cam_infos,
+                           train_cameras=train_cam_infos, # 包含了相机内外参，图片、feature_map、mask的路径
                            test_cameras=test_cam_infos,
                            full_cameras=full_cam_infos,
                            #video_cameras=video_cam_infos,
                            nerf_normalization=nerf_normalization,
                            # background settings
-                           ply_path=pts_path,
+                           ply_path=pts_path, #点云及随机的球谐波系数的保存位置
                            bg_ply_path=bg_ply_path,
-                           cam_frustum_aabb=aabb,
+                           cam_frustum_aabb=aabb, # 计算的所有相机视锥的包围盒
                            # panoptic segs
-                           num_panoptic_objects=num_panoptic_objects,
+                           num_panoptic_objects=num_panoptic_objects, 
                            panoptic_object_ids=panoptic_object_ids,
                            panoptic_id_to_idx=panoptic_id_to_idx,
                            # occ grid
-                           occ_grid=occ_grid if save_occ_grid else None,
+                           occ_grid=occ_grid if save_occ_grid else None, # occ网格
                            )
 
     return scene_info

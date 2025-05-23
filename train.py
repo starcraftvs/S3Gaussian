@@ -263,7 +263,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         exit()
 
     iter_start = torch.cuda.Event(enable_timing = True)
-    iter_end = torch.cuda.Event(enable_timing = True)
+    iter_end = torch.cuda.Event(enable_timing = True) # 不明白，用来记录什么时间的？？
 
     viewpoint_stack = None
     ema_loss_for_log = 0.0
@@ -280,15 +280,15 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
     if not viewpoint_stack:
         
-        viewpoint_stack = [i for i in train_cams]
+        viewpoint_stack = [i for i in train_cams] # 记录下所有视角的信息
         temp_list = copy.deepcopy(viewpoint_stack)
     
-    batch_size = opt.batch_size
+    batch_size = opt.batch_size # 默认写死了是1，即使变大，也是用accumulate grad来实现的
     print("data loading done")    
         
     count = 0
     psnr_dict = {}
-    for iteration in range(first_iter, final_iter+1):        
+    for iteration in range(first_iter, final_iter+1):     # 开始训练   
         # if network_gui.conn == None:
         #     network_gui.try_connect()
         # while network_gui.conn != None:
@@ -316,9 +316,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         #         print(e)
         #         network_gui.conn = None
 
-        iter_start.record()
+        iter_start.record() # 记录下开始跑的时间
 
-        position_lr = gaussians.update_learning_rate(iteration)
+        position_lr = gaussians.update_learning_rate(iteration)  # 这个还挺有意思的，之后可以细看？？
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
@@ -328,7 +328,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         idx = 0
         viewpoint_cams = []
 
-        while idx < batch_size :    
+        while idx < batch_size :    # 每个iteration，只训练batch_size个viewpoint
             
             viewpoint_cam = viewpoint_stack.pop(randint(0,len(viewpoint_stack)-1))
             if not viewpoint_stack :
@@ -353,7 +353,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 #                     viewpoint_stack.append(cam)
                 #                     break                
                 
-            viewpoint_cams.append(viewpoint_cam)
+            viewpoint_cams.append(viewpoint_cam) # 循环着往下训
             idx +=1
         if len(viewpoint_cams) == 0:
             continue
@@ -394,7 +394,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # breakpoint()
         Ll1 = l1_loss(image_tensor, gt_image_tensor[:,:3,:,:])
 
-        psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
+        psnr_ = psnr(image_tensor, gt_image_tensor).mean().double() # 算两个loss
         # if 'fine' in stage:
         #     psnr_dict.update({f"{viewpoint_cam.uid}": psnr_})
         # norm        
